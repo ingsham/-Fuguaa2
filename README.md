@@ -2,83 +2,107 @@
 
 Online marketplace for handwoven smocks. Next.js 14 (App Router), TypeScript, Tailwind, Prisma + PostgreSQL, NextAuth, Paystack, Resend (email), Arkesel (SMS).
 
-## What is in it
+## Features
 
 | Who | What they can do |
 | --- | --- |
-| Buyer | Sign up, browse and filter, cart, pay with Paystack (MoMo or card), track orders, confirm receipt, report an issue (72h window) |
-| Seller | Sign up, submit Ghana Card / passport + photo, get approved, list and edit products, mark orders shipped, see held vs released money |
-| Admin | Approve/reject sellers, view ID photo, edit/hide/delete any listing, resolve disputes, platform metrics. Admins also have every seller power (a verified "Fuguaa Official" shop is created for them) |
+| Buyer | Sign up, browse and filter, cart, pay with Paystack (MoMo or card), track orders, confirm receipt, report an issue (72h window), review delivered orders (verified purchases only), reset password |
+| Seller | Sign up, submit Ghana Card / passport + photo, get approved, list and edit products, mark orders shipped, see held vs released money, get email + SMS on each order |
+| Admin | Verification queue (with ID photo), listing moderation (edit / hide / delete), seller management (edit profile, suspend), buyer management (search, suspend), disputes, audit log, metrics. Also has every seller power (a verified "Fuguaa Official" shop is created for admins) |
 
-All photos are uploaded from the user's device. Product photos go to Vercel Blob. **ID photos are never public**: they are encrypted (AES-256-GCM) in the database and only the admin route can decrypt them.
+All photos are uploaded from the user's device (large phone photos are shrunk in the browser first). Product photos go to Vercel Blob. **ID photos are never public**: they are encrypted (AES-256-GCM) in the database and only the admin route can decrypt them, and every view is written to the audit log.
 
-Seller and admin get an **email and SMS** when someone pays for an order. The buyer gets a confirmation email, and shipped/dispute updates.
+## Deploying to Vercel: do these in order
 
-## Run locally
+The #1 cause of "Application error: a server-side exception has occurred" is a missing setting or missing database tables. Work through this list, then open **`https://YOUR-SITE/api/health`**. It tells you exactly what is missing (it never shows secret values).
 
-```bash
-npm install
-cp .env.example .env        # fill it in (see below)
-npx prisma migrate dev --name init   # or: npm run db:push
-npm run db:seed
-npm run dev
-```
-
-Open http://localhost:3000. Admin login is `ADMIN_EMAIL` / `ADMIN_PASSWORD` from your `.env`. Local product uploads go to `public/uploads` when no Blob token is set.
-
-Sample sellers from the seed use password `Seller12345`. **Delete them before launch.** Seeded products use placeholder art; to edit one, remove its placeholder photo and upload a real one.
+1. **Create a Postgres database** (Neon or Supabase) and copy its connection string (it must end with `?sslmode=require`).
+2. **Push the code to GitHub**, then in Vercel choose *Add New > Project* and import it.
+3. **Add environment variables** in Vercel *Settings > Environment Variables* (then redeploy). Required: `DATABASE_URL`, `NEXTAUTH_SECRET`, `ENCRYPTION_KEY`, `PAYSTACK_SECRET_KEY`, `NEXT_PUBLIC_SITE_URL`. See the table below.
+4. **Create the database tables** (once, from your own computer, using the production `DATABASE_URL`):
+   ```bash
+   npm install
+   DATABASE_URL="your-production-url" npx prisma db push
+   DATABASE_URL="your-production-url" ENCRYPTION_KEY="..." ADMIN_EMAIL="you@example.com" ADMIN_PASSWORD="a-strong-password" npm run db:seed
+   ```
+   (Windows PowerShell: set each variable with `$env:NAME="value"` first.) Skip the sample sellers if you do not want them: log in as admin and suspend or delete them.
+5. **Storage:** in Vercel *Storage*, create a **Blob** store and connect it to the project (adds `BLOB_READ_WRITE_TOKEN`). Without it, product photo uploads fail on Vercel.
+6. **Redeploy**, open `/api/health`, and fix anything it lists.
+7. **Paystack webhook:** Paystack dashboard > Settings > API & Webhooks > set `https://YOUR_DOMAIN/api/paystack/webhook`.
+8. **Custom domain:** Vercel > Settings > Domains. Update `NEXT_PUBLIC_SITE_URL` (and `NEXTAUTH_URL`) to it and redeploy.
 
 ## Environment variables
 
 | Variable | Notes |
 | --- | --- |
-| `DATABASE_URL` | Neon or Supabase Postgres connection string |
-| `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
-| `NEXTAUTH_URL`, `NEXT_PUBLIC_SITE_URL` | Your live URL, e.g. `https://fuguaa.com` (used for SEO, sitemap, Paystack callback) |
-| `ENCRYPTION_KEY` | `openssl rand -hex 32`. **Back this up. Lose it and stored IDs cannot be read.** |
-| `PAYSTACK_SECRET_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Paystack dashboard > Settings > API keys. Use test keys first |
-| `BLOB_READ_WRITE_TOKEN` | Vercel project > Storage > Create Blob store |
+| `DATABASE_URL` | Neon or Supabase connection string, with `?sslmode=require` |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32`. **Required in production or login breaks** |
+| `NEXT_PUBLIC_SITE_URL` | Your live URL, e.g. `https://fuguaa.com` (SEO, sitemap, Paystack callback, email links) |
+| `NEXTAUTH_URL` | Same URL. Optional on Vercel, recommended with a custom domain |
+| `ENCRYPTION_KEY` | `openssl rand -hex 32` (exactly 64 hex characters). **Back this up. Lose it and stored IDs cannot be read** |
+| `PAYSTACK_SECRET_KEY` | Paystack dashboard > Settings > API keys. Start with test keys |
+| `BLOB_READ_WRITE_TOKEN` | Added automatically when you connect a Vercel Blob store |
 | `RESEND_API_KEY`, `EMAIL_FROM` | resend.com. Verify your domain so mail does not land in spam |
-| `ARKESEL_API_KEY`, `SMS_SENDER_ID` | sms.arkesel.com. Sender ID is max 11 characters and may need approval |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_PHONE` | Admin account for the seed, and where admin alerts are sent |
+| `ARKESEL_API_KEY`, `SMS_SENDER_ID` | sms.arkesel.com. Sender ID max 11 characters, may need approval |
+| `ADMIN_EMAIL`, `ADMIN_PHONE` | Admin account for the seed, and where admin email/SMS alerts go |
+| `ADMIN_PASSWORD` | Only needed when running the seed |
+| `CRON_SECRET` | `openssl rand -hex 16`. Protects the daily job that auto-releases payments for orders shipped over 14 days ago with no dispute |
 
-## Push to GitHub and deploy on Vercel
+If email or SMS keys are missing, orders still work: the message is skipped and a warning is written to the Vercel logs.
+
+## Run locally
 
 ```bash
-git init && git add . && git commit -m "Fuguaa v1"
-git branch -M main
-git remote add origin https://github.com/YOUR_USER/fuguaa.git
-git push -u origin main
+npm install
+cp .env.example .env          # fill it in
+npx prisma migrate dev --name init   # creates prisma/migrations. Commit that folder
+npm run db:seed
+npm run dev
 ```
 
-1. On vercel.com choose **Add New > Project** and import the repo.
-2. Add every environment variable above (set `NEXT_PUBLIC_SITE_URL`/`NEXTAUTH_URL` to your domain).
-3. Create the Blob store under **Storage** and connect it to the project.
-4. Create the tables once from your computer with the production `DATABASE_URL`: `npx prisma migrate deploy` (or `npx prisma db push`), then `npm run db:seed` to create the admin.
-5. Deploy. In Paystack > Settings > API & Webhooks set the webhook URL to `https://YOUR_DOMAIN/api/paystack/webhook`.
-6. Add your custom domain in Vercel > Settings > Domains.
+Then production can use `npm run db:deploy` (applies the committed migrations) instead of `db push`.
+
+## Quality checks
+
+```bash
+npm run lint        # next lint
+npm run typecheck   # tsc --noEmit
+npm test            # unit tests (crypto, permissions, payments signature, uploads, escaping, schema)
+npm run build
+```
+
+`.github/workflows/ci.yml` runs all four on every push once the repo is on GitHub.
 
 ## SEO
 
-Built in: page titles and descriptions, Open Graph, canonical URLs, `sitemap.xml`, `robots.txt`, and JSON-LD (Organization, WebSite, Product with price and stock). To rank for "Fuguaa" and "smocks":
+Built in: page titles and descriptions, Open Graph, per-page canonical URLs, `sitemap.xml`, `robots.txt`, and JSON-LD (Organization, WebSite, Product with price, stock and ratings). Filtered/search shop pages are kept out of Google; occasion pages are indexed. To rank for "Fuguaa" and "smocks":
 
 1. Use a custom domain (ideally fuguaa.com) and set `NEXT_PUBLIC_SITE_URL` to it.
-2. Add the site to **Google Search Console**, paste the verification token in `app/layout.tsx` (`verification.google`), and submit `/sitemap.xml`.
+2. Add the site to **Google Search Console**, paste its verification token into `app/layout.tsx` (`verification.google`), and submit `/sitemap.xml`.
 3. Create a Google Business Profile and link to the site from Instagram, Facebook and WhatsApp.
-4. Add real photos and descriptive titles to every listing. Nobody can guarantee a first-place ranking, but the brand-name search is usually won quickly once the site is indexed.
+4. Use real photos and descriptive titles on every listing. Nobody can guarantee first place; the brand-name search is usually won quickly once the site is indexed.
 
 ## Money flow (simplified for the MVP)
 
-Payment is captured by Paystack at checkout and the order is marked `escrowStatus: HELD`. When the buyer taps "I received this" it becomes `RELEASED`; an admin refund sets `REFUNDED`. **The app tracks these statuses but does not move money.** Pay sellers out, and send refunds, from the Paystack dashboard (or add Paystack Transfers / Split payments later).
+Paystack captures payment at checkout and the order is marked `HELD`. When the buyer taps "I received this" (or 14 days pass after shipping with no dispute) it becomes `RELEASED`. An admin refund sets `REFUNDED`. **The app tracks these statuses but does not move money.** Pay sellers out, and send refunds, from the Paystack dashboard (or add Paystack Transfers / Split payments later).
+
+If an item sells out in the seconds between checkout and payment, the order is automatically opened as a dispute titled "Refund the buyer" and the seller is not asked to ship it.
 
 ## Security notes
 
-Passwords are bcrypt hashed. ID numbers and photos are AES-256-GCM encrypted. Card and MoMo details never touch this app (Paystack hosted page). Webhooks are HMAC verified, prices are always read from the database, uploads are checked by file signature, and auth/signup/upload/checkout are rate limited. The limiter is in-memory, so for production traffic swap `lib/rate-limit.ts` for Upstash Ratelimit. Before launch run through the OWASP checklist, set strong admin credentials, and review the Ghana Data Protection Act requirements for storing ID data.
+- Passwords: bcrypt. Reset links: single use, 1 hour, stored hashed.
+- ID numbers and photos: AES-256-GCM. The same ID cannot be registered on two shops.
+- Card and MoMo details never touch this app (Paystack hosted page). Webhooks are HMAC verified, and the paid amount must match the order total.
+- Roles are re-read from the database on every request, so suspending a user takes effect immediately.
+- Prices and stock always come from the database. Uploads are checked by file signature (SVG/HTML are rejected). Seller-supplied text is escaped in emails and JSON-LD.
+- Cross-site POSTs are rejected (origin check in `middleware.ts`); auth, signup, upload, checkout, review and reset endpoints are rate limited.
+- The rate limiter is in-memory, so each serverless instance has its own counter. For real traffic swap `lib/rate-limit.ts` for Upstash Ratelimit.
+- Not done: email verification at signup, a Content-Security-Policy header, 2FA for admins, NIA Ghana Card API check, and a review of the Ghana Data Protection Act requirements for storing ID data. Do these before heavy launch.
 
-## Not built yet
+## Not built
 
-Admin editing of seller profiles, admin management of buyer accounts, bulk approvals, audit log, reviews, favourites, password reset, NIA Ghana Card API check. (Rejected sellers can resubmit from `/seller-onboarding`.)
+Bulk approvals (deliberately omitted: each ID should be looked at), review moderation by admin, favourites, automatic payouts/refunds.
 
 ## Project map
 
-`app/` pages and API routes · `components/` UI · `lib/` auth, crypto, payments, notifications, orders · `prisma/` schema and seed
+`app/` pages and API routes · `components/` UI · `lib/` auth, crypto, payments, notifications, orders, permissions · `prisma/` schema and seed · `tests/` unit tests

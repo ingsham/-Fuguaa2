@@ -5,7 +5,7 @@ import { useCart } from '@/components/CartProvider';
 import { ghsFormat } from '@/lib/utils';
 
 export default function CheckoutPage() {
-  const { lines, total } = useCart();
+  const { lines, total, syncPrices } = useCart();
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -15,10 +15,10 @@ export default function CheckoutPage() {
     const f = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
     const res = await fetch('/api/checkout', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, size: l.size, color: l.color })), shipping: { name: f.name, phone: f.phone, address: f.address } }),
+      body: JSON.stringify({ items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, size: l.size, color: l.color })), shipping: { name: f.name, phone: f.phone, address: f.address }, expectedTotal: total }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) { setErr(json.error || 'Checkout failed. Try again.'); setBusy(false); return; }
+    if (!res.ok) { if (json.prices) syncPrices(json.prices); setErr(json.error || 'Checkout failed. Try again.'); setBusy(false); return; }
     window.location.href = json.url; // Paystack hosted page: Mobile Money or card
   }
 

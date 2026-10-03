@@ -5,6 +5,7 @@ import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { SITE_URL } from '@/lib/utils';
+import { jsonLd } from '@/lib/html';
 
 const sans = Figtree({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], variable: '--font-serif', display: 'swap' });
@@ -15,7 +16,6 @@ export const metadata: Metadata = {
   description: 'Buy authentic handwoven Ghanaian smocks (fugu) online. Wedding, funeral, festival and children smocks from verified weavers. Pay with Mobile Money or card.',
   keywords: ['Fuguaa', 'smocks', 'smock', 'Ghana smock', 'fugu', 'batakari', 'northern Ghana smock', 'wedding smock', 'buy smocks online', 'handwoven smock'],
   applicationName: 'Fuguaa',
-  alternates: { canonical: '/' },
   openGraph: { type: 'website', siteName: 'Fuguaa', title: 'Fuguaa | Handwoven Smocks from Ghana', description: 'Three generations of craft. Shop verified weavers.', images: ['/og.png'], url: SITE_URL },
   twitter: { card: 'summary_large_image', title: 'Fuguaa | Handwoven Smocks from Ghana', images: ['/og.png'] },
   robots: { index: true, follow: true },
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${sans.variable} ${serif.variable}`}>
       <body>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([org, site]) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd([org, site]) }} />
         <Providers>
           <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-white focus:p-3">Skip to content</a>
           <Header />

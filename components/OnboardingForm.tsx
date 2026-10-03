@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { REGIONS } from '@/lib/utils';
+import { compressImage } from '@/lib/client-image';
 
 export default function OnboardingForm({ initial }: { initial: { shopName: string; story: string; region: string } }) {
   const router = useRouter();
@@ -12,7 +13,10 @@ export default function OnboardingForm({ initial }: { initial: { shopName: strin
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(''); setBusy(true);
-    const res = await fetch('/api/seller/onboarding', { method: 'POST', body: new FormData(e.currentTarget) });
+    const fd = new FormData(e.currentTarget);
+    const photo = fd.get('idPhoto');
+    if (photo instanceof File && photo.size > 0) fd.set('idPhoto', await compressImage(photo, 2200, 0.9));
+    const res = await fetch('/api/seller/onboarding', { method: 'POST', body: fd });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(json.error || 'Could not submit. Try again.'); setBusy(false); return; }
     router.push('/dashboard/seller'); router.refresh();
@@ -31,7 +35,7 @@ export default function OnboardingForm({ initial }: { initial: { shopName: strin
         <input id="idNumber" name="idNumber" required autoComplete="off" placeholder={idType === 'GHANA_CARD' ? 'GHA-000000000-0' : 'G1234567'} className="input" /></div>
       <div><label className="label" htmlFor="idPhoto">Photo of your {idType === 'GHANA_CARD' ? 'Ghana Card' : 'passport'} (front)</label>
         <input id="idPhoto" name="idPhoto" type="file" accept="image/jpeg,image/png,image/webp" required className="input file:mr-3 file:rounded file:border-0 file:bg-cream file:px-3 file:py-1.5" />
-        <p className="mt-1 text-xs text-ink/60">Choose a photo from your device. JPG, PNG or WebP, up to 4 MB. Make sure all text is readable.</p></div>
+        <p className="mt-1 text-xs text-ink/60">Choose a photo from your device. JPG, PNG or WebP. Large photos are shrunk automatically. Make sure all text is readable.</p></div>
       {err && <p role="alert" className="text-sm font-medium text-red-700">{err}</p>}
       <button disabled={busy} className="btn-primary w-full">{busy ? 'Submitting...' : 'Submit for verification'}</button>
     </form>

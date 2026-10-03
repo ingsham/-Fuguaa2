@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { currentUser } from '@/lib/auth';
-import { encryptBuffer, encryptText } from '@/lib/crypto';
+import { encryptBuffer, encryptText, hashId } from '@/lib/crypto';
 import { rateLimit } from '@/lib/rate-limit';
-import { sniffImage } from '@/lib/upload';
+import { sniffImage } from '@/lib/image-sniff';
+import { sendEmail, sendSms } from '@/lib/notify';
+import { escapeHtml } from '@/lib/html';
 
 export const runtime = 'nodejs';
-const MAX_ID_BYTES = 4 * 1024 * 1024;
+const MAX_ID_BYTES = 4_000_000;
 
 const schema = z.object({
   shopName: z.string().trim().min(2).max(80),
@@ -22,7 +24,8 @@ export async function POST(req: Request) {
   if (!user || user.role !== 'SELLER') return NextResponse.json({ error: 'Seller account required' }, { status: 403 });
   if (!rateLimit(`onboard:${user.id}`, 5, 10 * 60_000)) return NextResponse.json({ error: 'Too many attempts.' }, { status: 429 });
 
-  const form = await req.formData();
+  const form = await req.formData().catch(() => null);
+  if (!form) return NextResponse.json({ error: 'Invalid form' }, { status: 400 });
   const parsed = schema.safeParse({
     shopName: form.get('shopName'), story: form.get('story') || undefined, region: form.get('region') || undefined,
     idType: form.get('idType'), idNumber: form.get('idNumber'),
@@ -40,15 +43,27 @@ export async function POST(req: Request) {
   const existing = await db.sellerProfile.findUnique({ where: { userId: user.id } });
   if (existing?.verificationStatus === 'VERIFIED') return NextResponse.json({ error: 'You are already verified.' }, { status: 409 });
 
+  // One identity, one shop: block the same ID number on another pending/verified account.
+  const idHash = hashId(d.idNumber);
+  const clash = await db.sellerProfile.findFirst({ where: { idNumberHash: idHash, userId: { not: user.id }, verificationStatus: { in: ['PENDING', 'VERIFIED'] } }, select: { id: true } });
+  if (clash) return NextResponse.json({ error: 'This ID is already registered to another shop. Contact Fuguaa support if this is a mistake.' }, { status: 409 });
+
   const data = {
     shopName: d.shopName, story: d.story ?? null, region: d.region ?? null, idType: d.idType,
-    idNumberEnc: encryptText(d.idNumber), verificationStatus: 'PENDING' as const, rejectionReason: null, submittedAt: new Date(),
+    idNumberEnc: encryptText(d.idNumber), idNumberHash: idHash,
+    verificationStatus: 'PENDING' as const, rejectionReason: null, submittedAt: new Date(),
   };
   const profile = await db.sellerProfile.upsert({ where: { userId: user.id }, create: { userId: user.id, ...data }, update: data });
+  const enc = new Uint8Array(encryptBuffer(buf));
   await db.idDocument.upsert({
     where: { sellerId: profile.id },
-    create: { sellerId: profile.id, mimeType: mime, dataEnc: encryptBuffer(buf) },
-    update: { mimeType: mime, dataEnc: encryptBuffer(buf) },
+    create: { sellerId: profile.id, mimeType: mime, dataEnc: enc },
+    update: { mimeType: mime, dataEnc: enc },
   });
+
+  // Tell the admin there is someone to review. Failures are logged, never shown to the seller.
+  const site = process.env.NEXT_PUBLIC_SITE_URL || '';
+  if (process.env.ADMIN_EMAIL) void sendEmail(process.env.ADMIN_EMAIL, `New seller to verify: ${d.shopName}`, `<p>${escapeHtml(d.shopName)} (${escapeHtml(user.name)}) submitted an ID. Review it in <a href="${site}/dashboard/admin?tab=verification">the admin dashboard</a>.</p>`);
+  if (process.env.ADMIN_PHONE) void sendSms(process.env.ADMIN_PHONE, `Fuguaa admin: ${d.shopName} submitted an ID for verification.`);
   return NextResponse.json({ ok: true });
 }

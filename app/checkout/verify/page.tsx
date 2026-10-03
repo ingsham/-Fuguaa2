@@ -13,13 +13,16 @@ export default async function VerifyPage({ searchParams }: { searchParams: { ref
   const user = await currentUser();
   let ok = false;
   if (ref && user) {
-    const mine = await db.order.findFirst({ where: { paymentRef: ref, buyerId: user.id } });
+    // Only the buyer who created these orders can confirm them.
+    const mine = await db.order.findFirst({ where: { paymentRef: ref, buyerId: user.id }, select: { id: true } });
     if (mine) {
       try {
         const tx = await verifyTransaction(ref);
-        const expected = (await db.order.aggregate({ where: { paymentRef: ref }, _sum: { total: true } }))._sum.total || 0;
-        if (tx.status === 'success' && tx.currency === 'GHS' && tx.amount === Math.round(expected * 100)) { await markPaid(ref); ok = true; }
-      } catch (e) { console.error('verify', e); }
+        if (tx.status === 'success' && tx.reference === ref) {
+          await markPaid(ref, { amountPesewas: tx.amount, currency: tx.currency }); // idempotent; also checks the amount
+          ok = (await db.order.count({ where: { paymentRef: ref, paymentStatus: 'UNPAID' } })) === 0;
+        }
+      } catch (e) { console.error('[verify failed]', e); }
     }
   }
   return (
@@ -34,7 +37,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: { ref
       ) : (
         <>
           <h1 className="text-3xl font-bold">We could not confirm your payment</h1>
-          <p className="mt-3 text-ink/75">If money left your account, it will show on your orders page shortly. Otherwise you can try again.</p>
+          <p className="mt-3 text-ink/75">If money left your account, your order will appear on your orders page shortly. Otherwise you can try again.</p>
           <div className="mt-6 flex justify-center gap-3"><Link href="/orders" className="btn-ghost">My orders</Link><Link href="/cart" className="btn-primary">Back to cart</Link></div>
         </>
       )}

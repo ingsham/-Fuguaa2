@@ -1,8 +1,13 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { db } from '@/lib/db';
+import { safe } from '@/lib/safe';
+import { liveSeller } from '@/lib/queries';
 import ProductCard from '@/components/ProductCard';
 
-export const revalidate = 300;
+// Always rendered on request: building never touches the database, and a missing DB cannot break the deploy.
+export const dynamic = 'force-dynamic';
+export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 const OCCASION_TILES = [
   { tag: 'wedding', label: 'Wedding', note: 'Fine weaves for the big day', bg: 'bg-terracotta text-white' },
@@ -14,8 +19,8 @@ const OCCASION_TILES = [
 
 export default async function Home() {
   const [products, sellers] = await Promise.all([
-    db.product.findMany({ where: { active: true, seller: { verificationStatus: 'VERIFIED' } }, orderBy: { createdAt: 'desc' }, take: 8, include: { seller: { select: { shopName: true } } } }),
-    db.sellerProfile.findMany({ where: { verificationStatus: 'VERIFIED' }, take: 3, orderBy: { createdAt: 'asc' }, include: { _count: { select: { products: true } } } }),
+    safe('home products', () => db.product.findMany({ where: { active: true, seller: liveSeller }, orderBy: { createdAt: 'desc' }, take: 8, include: { seller: { select: { shopName: true } } } }), []),
+    safe('home sellers', () => db.sellerProfile.findMany({ where: { ...liveSeller, shopName: { not: 'Fuguaa Official' } }, take: 3, orderBy: { createdAt: 'asc' }, include: { _count: { select: { products: true } } } }), []),
   ]);
 
   return (

@@ -54,10 +54,10 @@ export default async function SellerDashboard({ searchParams }: { searchParams: 
             {products.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-4 py-4">
                 <div className="h-16 w-14 overflow-hidden rounded bg-cream">{p.photos[0] && <img src={p.photos[0]} alt="" className="h-full w-full object-cover" />}</div>
-                <div className="min-w-0 flex-1"><p className="truncate font-semibold">{p.title}</p><p className="text-sm text-ink/60">{ghsFormat(p.price)} · {p.stock} in stock {!p.active && <span className="badge ml-1 bg-ink/10">Hidden</span>}</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate font-semibold">{p.title}</p><p className="text-sm text-ink/60">{ghsFormat(p.price)} · {p.stock} in stock {!p.active && <span className="badge ml-1 bg-ink/10">{p.hiddenByAdmin ? 'Hidden by Fuguaa' : 'Hidden'}</span>}</p></div>
                 {verified && <div className="flex gap-2">
                   <Link href={`/dashboard/products/${p.id}`} className="btn-ghost !px-3.5 !py-1.5">Edit</Link>
-                  <ActionButton url={`/api/products/${p.id}`} method="PATCH" body={{ active: !p.active }} label={p.active ? 'Hide' : 'Unhide'} />
+                  {!p.hiddenByAdmin && <ActionButton url={`/api/products/${p.id}`} method="PATCH" body={{ active: !p.active }} label={p.active ? 'Hide' : 'Unhide'} />}
                   <ActionButton url={`/api/products/${p.id}`} method="DELETE" label="Delete" variant="danger" confirm="Delete this listing permanently?" />
                 </div>}
               </li>

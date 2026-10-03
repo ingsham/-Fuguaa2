@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OCCASIONS, splitList } from '@/lib/utils';
+import { compressImage } from '@/lib/client-image';
 
 export type ProductInitial = {
   id?: string; title: string; description: string; price: string; stock: string; photos: string[];
@@ -23,7 +24,7 @@ export default function ProductForm({ initial = emptyProduct, backHref }: { init
     setErr(''); setUploading(true);
     for (const file of files) {
       if (v.photos.length >= 10) break;
-      const fd = new FormData(); fd.append('file', file);
+      const fd = new FormData(); fd.append('file', await compressImage(file));
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(`${file.name}: ${json.error || 'upload failed'}`); break; }

@@ -13,10 +13,6 @@ function enc(text: string) {
   return Buffer.concat([iv, c.getAuthTag(), body]).toString('base64');
 }
 
-// Placeholder "photo" so the UI is not empty. Sellers upload real photos from their devices.
-const svg = (a: string, b: string, c: string) =>
-  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 500'><rect width='400' height='500' fill='${a}'/><rect x='60' width='30' height='500' fill='${b}'/><rect x='130' width='70' height='500' fill='${c}'/><rect x='240' width='70' height='500' fill='${c}'/><rect x='330' width='30' height='500' fill='${b}'/><rect y='190' width='400' height='14' fill='#2B2118' opacity='.18'/><rect y='330' width='400' height='14' fill='#2B2118' opacity='.18'/></svg>`)}`;
-
 async function main() {
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@fuguaa.com';
   const admin = await db.user.upsert({
@@ -39,9 +35,9 @@ async function main() {
     if ((await db.product.count({ where: { sellerId: p.id } })) === 0) {
       await db.product.createMany({
         data: [
-          { sellerId: p.id, title: 'Classic Wedding Fugu', description: 'Fine handwoven cotton strips, lined for comfort. Made to be worn and remembered.', price: 850, stock: 6, photos: [svg('#C1572A', '#2B3A55', '#D9A441')], sizes: ['M', 'L', 'XL'], colors: ['Terracotta', 'Gold'], fabricType: 'Handwoven cotton', occasionTags: ['wedding', 'festival'], sizeGuide: 'M: chest 104 cm, shoulder 46 cm\nL: chest 112 cm, shoulder 48 cm\nXL: chest 120 cm, shoulder 50 cm' },
-          { sellerId: p.id, title: 'Indigo Funeral Smock', description: 'Deep indigo and dark strips, dignified and breathable.', price: 620, stock: 4, photos: [svg('#2B3A55', '#D9A441', '#3F6B4A')], sizes: ['M', 'L', 'XL'], colors: ['Indigo'], fabricType: 'Handwoven cotton', occasionTags: ['funeral'], sizeGuide: 'M: chest 104 cm\nL: chest 112 cm\nXL: chest 120 cm' },
-          { sellerId: p.id, title: 'Little Weaver Kids Smock', description: 'A small smock with the same craft as the grown-up ones.', price: 280, stock: 10, photos: [svg('#3F6B4A', '#F3E5D0', '#D9A441')], sizes: ['2-3Y', '4-5Y', '6-7Y'], colors: ['Green', 'Gold'], fabricType: 'Soft cotton', occasionTags: ['children', 'everyday'], sizeGuide: '2-3Y: chest 56 cm\n4-5Y: chest 62 cm\n6-7Y: chest 68 cm' },
+          { sellerId: p.id, title: 'Classic Wedding Fugu', description: 'Fine handwoven cotton strips, lined for comfort. Made to be worn and remembered.', price: 850, stock: 6, photos: ['/seed/terracotta.svg'], sizes: ['M', 'L', 'XL'], colors: ['Terracotta', 'Gold'], fabricType: 'Handwoven cotton', occasionTags: ['wedding', 'festival'], sizeGuide: 'M: chest 104 cm, shoulder 46 cm\nL: chest 112 cm, shoulder 48 cm\nXL: chest 120 cm, shoulder 50 cm' },
+          { sellerId: p.id, title: 'Indigo Funeral Smock', description: 'Deep indigo and dark strips, dignified and breathable.', price: 620, stock: 4, photos: ['/seed/indigo.svg'], sizes: ['M', 'L', 'XL'], colors: ['Indigo'], fabricType: 'Handwoven cotton', occasionTags: ['funeral'], sizeGuide: 'M: chest 104 cm\nL: chest 112 cm\nXL: chest 120 cm' },
+          { sellerId: p.id, title: 'Little Weaver Kids Smock', description: 'A small smock with the same craft as the grown-up ones.', price: 280, stock: 10, photos: ['/seed/green.svg'], sizes: ['2-3Y', '4-5Y', '6-7Y'], colors: ['Green', 'Gold'], fabricType: 'Soft cotton', occasionTags: ['children', 'everyday'], sizeGuide: '2-3Y: chest 56 cm\n4-5Y: chest 62 cm\n6-7Y: chest 68 cm' },
         ],
       });
     }

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { currentUser } from '@/lib/auth';
-import { ensureSellerProfileFor, productSchema } from '@/lib/products';
+import { ensureSellerProfileFor } from '@/lib/products';
+import { productSchema } from '@/lib/product-schema';
+import { audit } from '@/lib/audit';
 
 export async function POST(req: Request) {
   const user = await currentUser();
@@ -11,5 +13,6 @@ export async function POST(req: Request) {
   const parsed = productSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   const product = await db.product.create({ data: { ...parsed.data, sellerId: profile.id } });
+  if (user.role === 'ADMIN') await audit(user.id, 'product.create', 'Product', product.id);
   return NextResponse.json({ id: product.id });
 }

@@ -30,6 +30,7 @@ function LoginForm() {
         <div><label className="label" htmlFor="password">Password</label><input id="password" name="password" type="password" required autoComplete="current-password" className="input" /></div>
         {err && <p role="alert" className="text-sm font-medium text-red-700">{err}</p>}
         <button disabled={busy} className="btn-primary w-full">{busy ? 'Logging in...' : 'Log in'}</button>
+        <p className="text-sm"><Link href="/forgot-password" className="text-terracotta underline">Forgot your password?</Link></p>
       </form>
       <p className="mt-6 text-sm text-ink/70">New here? <Link href="/signup" className="font-semibold text-terracotta underline">Create an account</Link> or <Link href="/signup/seller" className="font-semibold text-terracotta underline">apply to sell</Link>.</p>
     </div>

@@ -1,14 +1,24 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import { safe } from '@/lib/safe';
+import { liveSeller } from '@/lib/queries';
 import ProductCard from '@/components/ProductCard';
 import { OCCASIONS, REGIONS } from '@/lib/utils';
 
-export const metadata: Metadata = {
-  title: 'Shop handwoven smocks',
-  description: 'Browse handwoven Ghanaian smocks by occasion, region, colour and price. Wedding, funeral, festival, everyday and children smocks from verified weavers.',
-  alternates: { canonical: '/shop' },
-};
+export const dynamic = 'force-dynamic';
+
+export function generateMetadata({ searchParams }: { searchParams: SP }): Metadata {
+  const occ = (OCCASIONS as readonly string[]).includes(searchParams.occasion || '') ? searchParams.occasion! : undefined;
+  const onlyOccasion = Object.entries(searchParams).every(([k, v]) => k === 'occasion' || !v);
+  const label = occ ? `${occ[0].toUpperCase()}${occ.slice(1)} smocks` : 'Shop handwoven smocks';
+  return {
+    title: label,
+    description: `Browse handwoven Ghanaian ${occ ? occ + ' ' : ''}smocks by occasion, region, colour and price, from verified weavers. Pay with Mobile Money or card.`,
+    alternates: { canonical: occ ? `/shop?occasion=${occ}` : '/shop' },
+    robots: onlyOccasion ? { index: true, follow: true } : { index: false, follow: true }, // filtered/search result pages stay out of Google
+  };
+}
 
 type SP = { q?: string; occasion?: string; region?: string; color?: string; fabric?: string; min?: string; max?: string };
 
@@ -17,10 +27,10 @@ export default async function Shop({ searchParams }: { searchParams: SP }) {
   const min = Number(searchParams.min) || undefined;
   const max = Number(searchParams.max) || undefined;
 
-  const products = await db.product.findMany({
+  const products = await safe('shop products', () => db.product.findMany({
     where: {
       active: true,
-      seller: { verificationStatus: 'VERIFIED', ...(region ? { region } : {}) },
+      seller: { ...liveSeller, ...(region ? { region } : {}) },
       ...(q ? { OR: [{ title: { contains: q, mode: 'insensitive' } }, { description: { contains: q, mode: 'insensitive' } }, { fabricType: { contains: q, mode: 'insensitive' } }] } : {}),
       ...(occasion ? { occasionTags: { has: occasion } } : {}),
       ...(color ? { colors: { has: color } } : {}),
@@ -30,8 +40,8 @@ export default async function Shop({ searchParams }: { searchParams: SP }) {
     orderBy: { createdAt: 'desc' },
     take: 60,
     include: { seller: { select: { shopName: true } } },
-  });
-  const fabrics = (await db.product.findMany({ where: { active: true, fabricType: { not: null } }, select: { fabricType: true }, distinct: ['fabricType'] })).map((f) => f.fabricType!);
+  }), []);
+  const fabrics = (await safe('shop fabrics', () => db.product.findMany({ where: { active: true, fabricType: { not: null } }, select: { fabricType: true }, distinct: ['fabricType'] }), [])).map((f) => f.fabricType!);
 
   return (
     <div className="container-x py-10">

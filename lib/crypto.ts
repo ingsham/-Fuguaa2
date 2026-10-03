@@ -1,8 +1,8 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'crypto';
 
 function key(): Buffer {
   const hex = process.env.ENCRYPTION_KEY || '';
-  if (hex.length !== 64) throw new Error('ENCRYPTION_KEY must be 64 hex characters (openssl rand -hex 32)');
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('ENCRYPTION_KEY must be 64 hex characters (openssl rand -hex 32)');
   return Buffer.from(hex, 'hex');
 }
 
@@ -24,4 +24,6 @@ export function decryptBuffer(data: Buffer): Buffer {
 
 export const encryptText = (t: string) => encryptBuffer(Buffer.from(t, 'utf8')).toString('base64');
 export const decryptText = (t: string) => decryptBuffer(Buffer.from(t, 'base64')).toString('utf8');
-export const maskId = (t: string) => (t.length <= 4 ? '****' : '*'.repeat(t.length - 4) + t.slice(-4));
+
+/** Stable keyed hash so the same ID number on two accounts can be detected without storing it in the clear. */
+export const hashId = (t: string) => createHmac('sha256', key()).update(t.replace(/[\s-]/g, '').toUpperCase()).digest('hex');

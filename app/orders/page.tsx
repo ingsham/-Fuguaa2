@@ -4,6 +4,9 @@ import { db } from '@/lib/db';
 import { currentUser } from '@/lib/auth';
 import { ghsFormat, DISPUTE_WINDOW_HOURS } from '@/lib/utils';
 import ActionButton from '@/components/ActionButton';
+import ReviewForm from '@/components/ReviewForm';
+import Stars from '@/components/Stars';
+import { disputeWindowOpen } from '@/lib/permissions';
 
 export const metadata = { title: 'My orders', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -21,7 +24,7 @@ export default async function Orders() {
   if (!user) redirect('/login?callbackUrl=/orders');
   const orders = await db.order.findMany({
     where: { buyerId: user.id, paymentStatus: 'PAID' }, orderBy: { createdAt: 'desc' },
-    include: { items: true, seller: { select: { shopName: true } }, dispute: true },
+    include: { items: true, seller: { select: { shopName: true } }, dispute: true, review: true },
   });
   return (
     <div className="container-x max-w-3xl py-10">
@@ -32,7 +35,7 @@ export default async function Orders() {
         <ul className="mt-8 space-y-5">
           {orders.map((o) => {
             const s = STATUS[o.status];
-            const windowOpen = o.status === 'SHIPPED' || (o.status === 'DELIVERED' && o.deliveredAt && Date.now() - o.deliveredAt.getTime() < DISPUTE_WINDOW_HOURS * 3600_000);
+            const windowOpen = disputeWindowOpen(o, DISPUTE_WINDOW_HOURS);
             return (
               <li key={o.id} className="overflow-hidden rounded-lg border border-ink/15">
                 <div className="weave !h-1" aria-hidden />
@@ -48,6 +51,8 @@ export default async function Orders() {
                     {windowOpen && !o.dispute && <ActionButton url={`/api/orders/${o.id}`} body={{ action: 'report' }} label="Report an issue" variant="danger" promptReason="What is wrong with your order?" />}
                   </div>
                   {o.status === 'DELIVERED' && windowOpen && <p className="mt-3 text-xs text-ink/60">You can report a problem for {DISPUTE_WINDOW_HOURS} hours after delivery.</p>}
+                  {o.status === 'DELIVERED' && !o.review && <ReviewForm orderId={o.id} />}
+                  {o.review && <p className="mt-3 text-sm">Your review: <Stars value={o.review.rating} />{o.review.comment ? ` ${o.review.comment}` : ''}</p>}
                   {o.dispute && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-900">Issue reported: {o.dispute.reason}. Status: {o.dispute.status.toLowerCase()}.</p>}
                 </div>
               </li>
