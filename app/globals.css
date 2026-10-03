@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --weave: linear-gradient(90deg,#C1572A 0 12%,#2B3A55 12% 20%,#D9A441 20% 38%,#3F6B4A 38% 43%,#F3E5D0 43% 57%,#3F6B4A 57% 62%,#D9A441 62% 80%,#2B3A55 80% 88%,#C1572A 88% 100%); }
+
+html { scroll-behavior: smooth; }
+body { @apply bg-white text-ink font-sans antialiased; }
+:focus-visible { outline: 3px solid #D9A441; outline-offset: 2px; }
+
+@layer components {
+  /* Woven-stripe motif from the logo, used sparingly: dividers, card tops, loading */
+  .weave { height: 6px; background-image: var(--weave); background-size: 240px 6px; }
+  .weave-thick { height: 14px; background-image: var(--weave); background-size: 360px 14px; }
+  .btn { @apply inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-terracotta text-white hover:bg-[#a84822]; }
+  .btn-dark { @apply btn bg-indigo text-white hover:bg-[#1f2b40]; }
+  .btn-ghost { @apply btn border border-ink/20 bg-white text-ink hover:border-ink/50; }
+  .btn-danger { @apply btn border border-red-300 bg-white text-red-700 hover:bg-red-50; }
+  .input { @apply w-full rounded-md border border-ink/25 bg-white px-3 py-2.5 text-sm placeholder:text-ink/40 focus:border-indigo focus:outline-none; }
+  .label { @apply mb-1 block text-sm font-medium; }
+  .badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+  .container-x { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+}
+
+@keyframes weave-slide { from { background-position: 0 0; } to { background-position: 240px 0; } }
+.weave-loading { height: 6px; background-image: var(--weave); background-size: 240px 6px; animation: weave-slide 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .weave-loading { animation: none; } html { scroll-behavior: auto; } }

@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum VerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+}
+
+enum EscrowStatus {
+  NONE
+  HELD
+  RELEASED
+  REFUNDED
+}
+
+enum DisputeStatus {
+  OPEN
+  REFUNDED
+  RELEASED
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  phone        String
+  country      String
+  passwordHash String
+  role         Role           @default(BUYER)
+  createdAt    DateTime       @default(now())
+  seller       SellerProfile?
+  orders       Order[]
+}
+
+model SellerProfile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopName           String
+  story              String?
+  region             String?
+  idType             String             @default("GHANA_CARD") // GHANA_CARD | PASSPORT
+  idNumberEnc        String? // AES-256-GCM encrypted
+  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
+  rejectionReason    String?
+  submittedAt        DateTime?
+  reviewedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  idDocument         IdDocument?
+  products           Product[]
+  orders             Order[]
+}
+
+// ID photo is stored encrypted in the database, never on a public URL.
+model IdDocument {
+  id        String        @id @default(cuid())
+  sellerId  String        @unique
+  seller    SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  mimeType  String
+  dataEnc   Bytes
+  createdAt DateTime      @default(now())
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  sellerId     String
+  seller       SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  price        Float // GHS
+  stock        Int
+  photos       String[]
+  sizes        String[]
+  colors       String[]
+  fabricType   String?
+  occasionTags String[]
+  sizeGuide    String?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  items        OrderItem[]
+
+  @@index([active, createdAt])
+}
+
+model Order {
+  id           String        @id @default(cuid())
+  paymentRef   String
+  buyerId      String
+  buyer        User          @relation(fields: [buyerId], references: [id])
+  sellerId     String
+  seller       SellerProfile @relation(fields: [sellerId], references: [id])
+  status       OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
+  escrowStatus EscrowStatus  @default(NONE)
+  total        Float
+  shippingName    String
+  shippingPhone   String
+  shippingAddress String
+  paidAt       DateTime?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+  createdAt    DateTime      @default(now())
+  items        OrderItem[]
+  dispute      Dispute?
+
+  @@index([paymentRef])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  title     String
+  quantity  Int
+  price     Float
+  size      String?
+  color     String?
+}
+
+model Dispute {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reason    String
+  status    DisputeStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+  resolvedAt DateTime?
+}
